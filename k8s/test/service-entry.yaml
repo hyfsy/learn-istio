@@ -1,0 +1,36 @@
+# 允许添加外部的服务到istio内部自己的注册中心，方便网格内服务调用和流量管理
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: demo-se-redis
+spec:
+  hosts: # 需要包含在网格内的域名
+    - "*"
+  ports: # 暴露的端口
+    - name: tcp
+      number: 6379
+      protocol: TCP
+    - name: https
+      number: 443
+      protocol: HTTPS
+  resolution: DNS # host解析方式，默认DNS，NONE表示不进行域名解析，一般在应用程序解析时使用，STATIC表示endpoint中的address解析，DNS_ROUND_ROBIN连接发起只使用第一个获取的ip，不依赖于dns的完整结果，防止连接池耗尽
+  location: MESH_EXTERNAL # 表示是个外部服务，MESH_INTERNAL理解为一个内部扩展基础设施服务的一部分，区别：外部服务的istio mTLS会被禁用（将调用方当做client）
+  endpoints:
+    - address: unix:///var/run/example/socket # 指定unix的socket文件地址
+    - address: 1.1.1.1
+      ports:
+        http: 8080
+    - address: 2.2.2.2
+      ports:
+        http: 9090
+  subjectAltNames: # 要校验的SAN主体标识
+    - "spiffe://cluster.local/ns/httpbin-ns/sa/httpbin-service-account"
+  addresses: # 关联服务的虚拟IP地址
+    - 192.192.192.192/24 # VIPs
+  workloadSelector: # 和endpoints只能指定一个，且该selector仅用于 MESH_INTERNAL
+    labels:
+      xxx: xxx
+  exportTo: [ "*" ] # 暴露的namespace
+
+
+

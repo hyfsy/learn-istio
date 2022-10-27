@@ -1,0 +1,29 @@
+# k8s原生的ingress必须和一个ingress controller配合使用，此处使用istio
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    # 指定使用 Istio Ingress Controller，已废弃，推荐使用IngressClass resource
+    kubernetes.io/ingress.class: istio
+  name: demo-ingress-istio
+spec:
+  ingressClassName: istio-class # 推荐使用此种方式
+  rules:
+    - host: demo-service-consumer
+      http:
+        paths:
+          - path: /consumer
+            pathType: Exact # Prefix
+            backend:
+              serviceName: demo-service-consumer
+              servicePort: 8081
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: IngressClass
+metadata:
+  name: istio-class
+spec:
+  controller: istio.io/ingress-controller
+
+# k8s自身也支持类似istio gateway的网关：
+# https://gateway-api.sigs.k8s.io/

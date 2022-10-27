@@ -1,0 +1,64 @@
+# 工作负载如何生成遥测指标
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: demo-telemetry
+  namespace: istio-system # 命名空间为根命名空间表示为网格范围的配置，不能使用selector，命名空间范围同理
+spec:
+  # no selector specified, applies to all workloads
+  # workload > namespace > mesh
+  selector:
+    matchLabels:
+      service.istio.io/canonical-name: xxx # 选择器只能选择单个资源
+  tracing:
+    - providers:
+        - name: "zipkin-alternate" # 使用zipkin进行链路追踪
+      randomSamplingPercentage: 0.01 # 随机采样1%
+      disableSpanReporting: true # 禁用本跨度span的报告，但不会影响追踪上下文的传播和采样的报告
+      customTags: # 添加额外的span标签，会完全覆盖parent配置
+        new_tag:
+          literal: # 硬编码值
+            value: "xxx"
+          environment: # 环境变量
+            name: xxx
+            defaultValue: xxx
+          header: # 请求头
+            name: xxx
+            defaultValue: xxx
+      match:
+        mode: CLIENT_AND_SERVER
+  metrics:
+    - providers: # 目前只能指定单个provider
+        - name: stackdriver
+        - name: prometheus
+      overrides: # 覆盖配置，mesh -> namespace -> workload
+        - match: # 禁用服务端测的所有指标的遥测，不指定将应用于所有模式的所有指标
+            metric: ALL_METRICS # istio标准指标: https://istio.io/latest/docs/reference/config/telemetry/#MetricSelector-IstioMetric
+            customMetric: xxx # 自定义指标
+            mode: SERVER # 指标生成的模式，CLIENT表示客户端测生成的指标，CLIENT_AND_SERVER表示两个
+          disabled: true
+          tagOverrides: # 标签覆盖，部分providers可能不支持标签的添加和删除
+            xxx: xxx
+        - tagOverrides: # 标签覆盖
+            request_method:
+              operation: UPSERT # insert or update，REMOVE表示删除
+              value: "request.method" # envoy attributes: https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/advanced/attributes
+            request_host:
+              value: "request.host"
+        - match:
+            metric: REQUEST_COUNT
+          tagOverrides: # 移除指标上的对应维度
+            response_code:
+              operation: REMOVE
+  accessLogging:
+    - providers: # 控制着日志具体的行为，不支持API控制
+        - name: envoy
+      disabled: false
+      match: # 粗粒度的日志行为控制
+        mode: # 指标生成的模式
+          CLIENT
+      filter: # 细粒度的日志行为控制
+        expression: response.code >= 400 || connection.mtls && request.url_path.contains('v1beta3') # CEL expression: https://opensource.google/projects/cel
+
+
+

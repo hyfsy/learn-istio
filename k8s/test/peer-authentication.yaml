@@ -1,0 +1,16 @@
+# 服务之间的端对端认证
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: demo-ingress-pa
+  namespace: default # 命名空间范围
+spec:
+  selector:
+    matchLabels:
+      app: demo-gateway # pod筛选
+  mtls:
+    mode: STRICT # 严格启用，PERMISSIVE表示支持mtls和plaintext，DISABLE表示不支持mtls，UNSET表示继承自命名空间或网格配置，并覆盖端口级配置
+  portLevelMtls: # port级别额外处理，仅当指定了selector时才起作用
+    80:
+      mode: DISABLE # 禁用
+

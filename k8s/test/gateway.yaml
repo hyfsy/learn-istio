@@ -1,0 +1,50 @@
+# 默认 Gateway 将自动提供相同名称的 Service 和 Deployment，可通过配置相同name的资源来覆盖
+# 描述一个负载均衡操作来在网格边缘接受入口和出口请求
+# vs可绑定该网格对流量进行控制
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: demo-gateway
+spec:
+  selector:
+    app: istio-ingressgateway # 默认gateway实现
+    istio: ingressgateway # 默认，废弃
+  servers:
+    # 不同host可以有相同的port，代表为多个host配置tls网关
+    - port:
+        name: http
+        protocol: HTTP # one of HTTP|HTTPS|GRPC|HTTP2|MONGO|TCP|TLS
+        number: 80
+        targetPort: # 流量接受的端口，仅用于 ServiceEntry
+      hosts:
+        - "*" # namespace/host 格式，一个通配符可用于host的最左边（后缀匹配）
+      bind: 1.1.1.1 # 可限制该gateway仅内部可达，比如用于内部指标暴露
+    - port:
+        name: https
+        number: 443
+        protocol: HTTPS
+      tls:
+        httpsRedirect: true # send 301 redirect for "http" requests to ask client to use HTTPS
+        # MUTUAL指示必须 mTLS
+        # ISTIO_MUTUAL表示使用istio内置ca来自行管理，credentialName不需要配置
+        # PASSTHROUGH表示从SNI上获取主机来进行路由，并将请求按原样转发到目的地，不进行TLS终止
+        # AUTO_PASSTHROUGH和前面类似，指示host后的ip/port集群也在SNI上指定，不需要走注册中心，这种模式假设双方都是用istio mtls
+        mode: SIMPLE # 标准外部证书模式，指定外部证书的信息
+        serverCertificate: /etc/server_cert.pem
+        privateKey: /etc/private_key.pem
+        caCertificates: /etc/ca_cert.pem # 客户端的ca证书列表，仅MUTUAL需要
+        credentialName: demo-gateway-secret # k8s Secret name
+        subjectAltNames: [ "xxx" ] # 要校验的证书的主体标识
+        verifyCertificateSpki: [ "xxx" ] # 需要校验的 base64-encoded SHA-256 hashes of the SPKIs，当同时指定了verify_certificate_hash和verify_certificate_spki时，匹配其中任何一个值的哈希都将导致证书被接受
+        verifyCertificateHash: [ "xxx" ] # 授权客户端证书的十六进制编码SHA-256散列，简单格式和冒号分隔格式都是可以接受的
+        minProtocolVersion: TLS_AUTO # TLSV1_0 / TLSV1_1 / TLSV1_2 / TLSV1_3
+        maxProtocolVersion: TLS_AUTO
+        cipherSuites: [ "xxx" ] # 支持的加密套件，不指定则默认基于envoy
+      hosts:
+        - demo-service-consumer
+  addresses:
+    - value: demo-ingress.default.svc.cluster.local # 手动配置Deployment和Service时将Ingress和Service进行关联
+      type: Hostname
+
+
+

@@ -1,0 +1,64 @@
+# 一般配合RequestAuthentication使用，提供用户的授权策略
+# 注意，如果针对tcp流量设置了http的条件，则该规则会被忽略
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: demo-ingress-ap
+  namespace: default # 命名空间范围，默认匹配和当前资源相同的命名空间，根命名空间表示对所有命名空间生效（默认istio-system）
+spec:
+#  {} # 什么都不指定表示拒绝所有请求
+  selector:
+    matchLabels:
+      app: demo-gateway
+  # 无效请求情况，如tcp请求上指定时operation.methods
+  # ALLOW：Istio会忽略该无效的AuthorizationPolicy规则，没有指定任何策略则允许，否则都不匹配的就拒绝
+  # DENY：Istio仅会忽略无效的匹配字段，其他字段仍然会进行匹配
+  action: DENY # 拒绝行为，默认允许，其他还有ALLOW，CUSTOM（用于外部授权，默认仅支持ext_authz），CUSTOM > DENY > ALLOW，AUDIT仅用于请求审计，需开启额外插件（Stackdriver）
+  provider: # action=CUSTOM时需要配置的外部授权器名称，该名称在istio MeshConfig或configmap中配置的
+    name: xxx
+  rules: # 如果没有指定，表示不进行任何rule匹配，在action=ALLOW(default)的情况下，表示拒绝
+#    - {} # 规则为空表示允许所有请求
+    - from:
+        - source: # 多个source表示or，source的多个参数表示and，参数的多个值表示or
+            principals: [ "cluster.local/ns/default/sa/admin" ] # 指定用户访问，A list of peer identities derived from the peer certificate，格式：<TRUST_DOMAIN>/ns/<NAMESPACE>/sa/<SERVICE_ACCOUNT>，等同于request.principal，需要mTLS
+            requestPrincipals: [ "*", "xxx@secure.io/xxx@secure.io" ] # jwt中的值，格式：iss/sub，等同于request.auth.principal，需要认证支持
+            namespaces: [ "default" ] # 指定命名空间，A list of namespaces derived from the peer certificate，等同于source.namespace，需要mTLS
+            ipBlocks: [ "1.2.3.4", "5.6.7.0/24" ] # ip ==，等同于source.ip
+            remoteIpBlocks: [ "xxx" ] # 代理ip使用，如x-forward-for标头或Proxy协议等，从这些地方获取，等同于remote.ip
+            # not xxx
+            notPrincipals: [ "xxx" ]
+            notRequestPrincipals: [ "xxx" ] # 所有请求中没有token就403
+            notNamespaces: [ "xxx" ]
+            notIpBlocks: [ "1.1.1.1" ] # ip !=
+            notRemoteIpBlocks: [ "xxx" ]
+        - source:
+            namespaces: [ "test" ]
+      to:
+        - operation: # 多个operation表示or，operation的多个参数表示and，参数的多个值表示or
+            hosts: [ "*.exam.com" ]
+            ports: [ "9000" ]
+            methods: [ "GET" ] # 匹配GET请求，grpc永远为POST
+            paths: [ "/echo*" ] # 匹配uri路径，grpc为 /package.service/method
+            # not xxx
+            notHosts: [ "xxx" ]
+            notPorts: [ "xxx" ]
+            notMethods: [ "xxx" ]
+            notPaths: [ "xxx" ]
+        - operation:
+            methods: [ "POST" ]
+            paths: [ "/data" ]
+      when:
+        - key: request.headers[x-token] # http请求头的值不是admin，所有支持的key see https://istio.io/latest/docs/reference/config/security/conditions/
+          value: [ "admin" ]
+          # not xxx
+          notValues: [ "xxx" ]
+        - key: request.auth.claims[iss] # 当token内包含对应字段和对应的值匹配时才应用该规则
+          values: [ "https://accounts.google.com" ]
+    - from:
+        - source:
+            requestPrincipals: [ "issuer-xxx/*" ]
+      to:
+        - operation:
+            hosts: [ "exam.com" ]
+
+

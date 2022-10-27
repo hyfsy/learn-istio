@@ -1,0 +1,112 @@
+# 路由后的请求再处理
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: demo-dest-consumer
+spec:
+  #  host: demo-service-consumer
+  host: "*.baidu.com"
+  workloadSelector: # 匹配的pod才会应用该destination规则
+    matchLabels:
+      app: demo-consumer
+      version: v1
+  subsets:
+    - name: v1
+      labels:
+        version: v1 # 筛选pod(service endpoint)
+      trafficPolicy: # 会覆盖destination级别的配置
+        loadBalancer:
+          - simple: ROUND_ROBIN
+    - name: v2
+      labels:
+        version: v2
+    - name: v3
+      labels:
+        version: v3
+  # 每个host只有第一个配置的有效
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN # UNSPECIFIED(自动选择一个合适的) / RANDOM / PASSTHROUGH(直接将连接发送给目标地址，不进行负载均衡，直连) / ROUND_ROBIN(不推荐使用) / LEAST_REQUEST(推荐)
+      consistentHash: # 一致性hash
+        httpHeaderName: xxx
+        httpCookie:
+          name: user
+          path: /baidu.com
+          ttl: 0s # cookie不存在时自动生成的cookie的失效时间
+        useSourceIp: true # 基于客户端ip
+        httpQueryParameterName: xxx
+        minimumRingSize: 1024 # 虚拟节点个数
+      localityLbSetting: # 基于地域的负载均衡规则，distribute/failover/failoverPriority 只能设置一个
+        enabled: true
+        distribute: # 地域权重路由，主要用于不同区域的流量分发
+          # 名称规范：region/zone/sub_zone
+          - from: region1/zone1/* # * 匹配所有
+            to:
+              "region1/zone1/*": 70 # 权重和必须为100，仅此处强制
+              "region1/zone2/*": 30
+          - from: region1/zone2/*
+            to:
+              "region1/zone1/*": 30
+              "region1/zone2/*": 70
+        failover: # 地域故障转移，基于k8s的 --context，必须配合 OutlierDetection 来检测不健康的端点，否则不生效，主要用于故障转移
+          - from: us-east
+            to: us-west
+        failoverPriority: # 指定故障转移的优先级标签（pod/namespace），必须匹配第一个才能匹配第二个，优先级按匹配个数来
+          - "topology.istio.io/network"
+          - "topology.kubernetes.io/region"
+          - "topology.kubernetes.io/zone"
+          - "topology.istio.io/subzone"
+      warmupDurationSecs: 5s # 预热周期，仅支持 ROUND_ROBIN 和 LEAST_REQUEST
+    connectionPool:
+      tcp: # 也通用与http
+        maxConnections: 100 # 最大连接数，默认 2^23-1
+        connectTimeout: 10s # tcp超时时间
+        tcpKeepalive: # set SO_KEEPALIVE to socket
+          time: 7200s # tcp连接的空闲时间，依赖于OS，linux默认7200s
+          interval: 75s # probes扫描的周期，依赖于OS，linux默认75s
+          probes: 9 # 在确定连接已死之前，发送而不响应的最大keepalive探测数，依赖于OS，linux默认9
+        maxConnectionDuration: 24h # tcp连接的生命时长，从建立连接开始，达到后自动关闭
+      http: # 用于 HTTP1.1/HTTP2/GRPC
+        http1MaxPendingRequests: 1024 # 请求队列大小，等待请求连接，both HTTP/1.1 and HTTP2
+        http2MaxRequests: 1024 # 到destination的活跃请求数（并发请求数？），both HTTP/1.1 and HTTP2
+        maxRequestsPerConnection: 1 # 每个连接的最大请求数
+        maxRetries: 3 # 超时时间
+        idleTimeout: 1h # 空闲时间，没有请求会自动关闭
+        h2UpgradePolicy: DEFAULT # http1.1 -> http2连接升级策略，DO_NOT_UPGRADE 表示不升级，UPGRADE 表示升级
+        useClientProtocol: true # 设置为true时，h2UpgradePolicy无效，If set to true, client protocol will be preserved while initiating connection to backend
+    outlierDetection: # 探测到错误的host，会被客户端从连接池中弹出，等待一段时间后再恢复
+      consecutive5xxErrors: 5 # 连续返回5次错误时就会对对应主机进行熔断
+      interval: 1s # 检查周期1s
+      baseEjectionTime: 1m # 将对应主机拒绝1m
+      maxEjectionPercent: 10 # 负载均衡池中驱逐host的最大百分比
+      splitExternalLocalOriginErrors: true # 忽略外部上游的错误，如5xx状态码，仅探测应用本身的错误，如connect timeout等，默认false
+      consecutiveLocalOriginFailures: 5 # 错误次数，仅上面的参数为true时生效
+      consecutiveGatewayErrors: 0 # 网关错误（502/503/504），tcp情况为连接超时、连接失败等，默认禁用，包含在consecutive5xxErrors配置内，大于它则没有作用
+      minHealthPercent: 0 # 离群摘除功能的阈值，host低于此阈值时，客户端将会收到健康和不健康的节点
+    portLevelSettings: # 会覆盖destination级别的
+      - port:
+          number: 80
+        loadBalancer:
+          simple: LEAST_REQUEST
+        tls:
+          mode: SIMPLE # 配置出口流量的tls，一般用于egress进行tls发起，此处不需要配置证书等信息，因为不是mTLS
+          credentialName: xxx # 模式为MUTUAL使用，为k8s secret的名称
+          sni: demo-service-provider.default.svc.cluster.local # optional，指定当前请求的主机名称
+    tls:
+      mode: ISTIO_MUTUAL # 出口流量采用 istio mTLS，配置该模式底下所有配置都不需要。DISABLE禁用、SIMPLE单向tls、MUTUAL双向tls、ISTIO_MUTUAL istio自带的双向tls
+      clientCertificate: /etc/cert.pem
+      privateKey: /etc/private_key.pem
+      caCertificates: /etc/rootcacerts.pem
+      # 该字段默认只应用到gateway，如果还要应用到其他的sidecar，必须指定WorkLoadSelector，否则其他sidecar只能使用上面的文件配置
+      credentialName: xxx # k8s secret name, must in the same namespace，和上面三个只能使用一个
+      subjectAltNames: [ "xxx" ] # 要校验的SAN主体标识
+      sni: xxx # tls握手时发送给服务端的host/authority标识
+      insecureSkipVerify: true # 是否忽略ca证书签名和SAN验证
+    tunnel: # https://istio.io/latest/zh/docs/reference/config/networking/destination-rule/#TrafficPolicy
+      protocol: CONNECT # http connect代理，POST，http post代理
+      targetHost: 1.1.1.1
+      targetPort: 80
+  exportTo: [ ".", "default" ]
+
+
+
