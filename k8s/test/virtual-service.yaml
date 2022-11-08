@@ -12,135 +12,129 @@ spec:
     - config-namespace/demo-gateway # 相同的namespace可以被省略
     - mesh
   http:
-    name: xxx # for debug and log
-      - match: # 指定delegate时不能设置正则匹配
-          - name: # for log
-            gateways: # 覆盖全局的gateways
-              - mesh # vs中不指定gateways时会隐式指定，表示该vs应用到sidecar
-              - demo-gateway
-          - uri: # 针对uri进行匹配
-              prefix: /consumer # 严格前缀匹配，如/consumer1不匹配
-              exact: /consumer
-              regex: xxx # RE2 style regex-based match (https://github.com/google/re2/wiki/Syntax)
-            # 也可通过请求参数 ignore_uri_case 启用
-            ignoreUriCase: true
-            schema:
-              exact: http
-            method:
-              exact: GET
-            authority:
-              exact: xxx # http2里的
-            headers: # 都小写，且用-作为分隔符串联，如：x-request-id，仅指定key将检查头是否存在
-              custom-header: xxx
-              cookie:
-                regex: "^(.*?;)?(email=[^;]*@some-company-name.com)(;.*)?$"
-              "@request.auth.claims.groups": # @表示JWT验证的元数据，一般配合AuthorizationPolicy使用来保证此处一定有值，此功能为实验性功能，仅在gateway中支持
-                exact: group1
-            port: 1234
-            sourceLabels: # 使用此字段时，如果有顶层级gateway字段限制，则gateway必须包含mesh
-              app: xxx
-            queryParams: # 不支持prefix
-              aaa:
-                exact: bbb
-            withoutHeaders:
-              - name:
-                  exact: zhangsan
-            sourceNamespace: xxx # 约束使用的命名空间，使用此字段时，如果有顶层级gateway字段限制，则gateway必须包含mesh
-            statPrefix: xxx # 指标前缀，prefix route 生成，only for proxy-level statistics (envoy*) and not service-level (istio*) statistics
-        rewrite: /xxx # uri重写
-        route:
-          # 基于权重的流量迁移
-          - destination:
-              host: demo-service-consumer
-              port:
-                number: 8081
-              subset: v1
-            weight: 80 # 80%的流量（weight/allWeights），0表示没有流量
-          - destination:
-              host: demo-service-consumer
-              port:
-                number: 8081
-              subset: v2
-            weight: 20 # 20%的流量
-            headers: # 操纵请求头
-              request: # 转发请求前处理
-                set: # 设置，会覆盖
-                  xxx: xxx
-        # 也可以在应用发起的请求头上配置 x-envoy-upstream-rq-timeout-ms 指定超时
-        timeout: 0.5s # 转发的请求超时时间，默认禁用
-        fault: # 故障注入，在vs上配置，可以配置为针对某些用户，而不会影响生产
-          delay: # 请求延迟，模拟超载的上游请求
-            fixedDelay: 7s # 7s的延迟再转发请求
-            percentage:
-              value: 100 # 100%请求
-          abort: # 请求直接拒绝，模拟异常的上游，直接返回错误给下游
-            httpStatus: 500 # 返回http状态码500
-            grpcStatus: UNAVAILABLE # https://github.com/grpc/grpc/blob/master/doc/statuscodes.md
-            percentage:
-              value: 100 # 100%请求
-        # 镜像请求会在 headers 中的 Host/Authority 属性值上追加 -shadow，如 domain-shadow
-        # 镜像请求的响应会被丢弃
-        mirror: # 匹配该规则的流量镜像到v3版本
-          host: demo-service-consumer
-          subset: v3
-        mirrorPercentage: # 100%的流量都镜像
-          value: 100.0
-    # 默认规则
-    route:
-      - destination:
+    - name: xxx # for debug and log
+      match: # 指定delegate时不能设置正则匹配
+        - name: # for log
+          gateways: # 覆盖全局的gateways
+            - mesh # vs中不指定gateways时会隐式指定，表示该vs应用到sidecar
+            - demo-gateway
+        - uri: # 针对uri进行匹配
+            prefix: /consumer # 严格前缀匹配，如/consumer1不匹配
+            exact: /consumer
+            regex: xxx # RE2 style regex-based match (https://github.com/google/re2/wiki/Syntax)
+          # 也可通过请求参数 ignore_uri_case 启用
+          ignoreUriCase: true
+          schema:
+            exact: http
+          method:
+            exact: GET
+          authority:
+            exact: xxx # http2里的
+          headers: # 都小写，且用-作为分隔符串联，如：x-request-id，仅指定key将检查头是否存在
+            custom-header: xxx
+            cookie:
+              regex: "^(.*?;)?(email=[^;]*@some-company-name.com)(;.*)?$"
+            "@request.auth.claims.groups": # @表示JWT验证的元数据，一般配合AuthorizationPolicy使用来保证此处一定有值，此功能为实验性功能，仅在gateway中支持
+              exact: group1
+          port: 1234
+          sourceLabels: # 使用此字段时，如果有顶层级gateway字段限制，则gateway必须包含mesh
+            app: xxx
+          queryParams: # 不支持prefix
+            aaa:
+              exact: bbb
+          withoutHeaders:
+            - name:
+                exact: zhangsan
+          sourceNamespace: xxx # 约束使用的命名空间，使用此字段时，如果有顶层级gateway字段限制，则gateway必须包含mesh
+          statPrefix: xxx # 指标前缀，prefix route 生成，only for proxy-level statistics (envoy*) and not service-level (istio*) statistics
+      route:
+        # 基于权重的流量迁移
+        - destination:
+            host: demo-service-consumer
+            port:
+              number: 8081
+            subset: v1
+          weight: 80 # 80%的流量（weight/allWeights），0表示没有流量
+        - destination:
+            host: demo-service-consumer
+            port:
+              number: 8081
+            subset: v2
+          weight: 20 # 20%的流量
+          headers: # 操纵请求头
+            request: # 转发请求前处理
+              set: # 设置，会覆盖
+                xxx: xxx
+      # 下列多个字段均适用于match内部
+      redirect: # 默认forward
+        uri: /xxx # 匹配的请求重定向
+        authority: xxx # 修改响应值 Authority(http2)/Host
+        derivePort: FROM_PROTOCOL_DEFAULT # 使用默认的，http用80，https用443 / FROM_REQUEST_PORT 从请求中获取port
+        schema: xxx # 修改schema
+        redirectCode: 301
+      directResponse: # route或redirect为空才启用，直接发送个响应返回
+        status: 503
+        body:
+          string: "{\"error\":\"unknown error\"}"
+          bytes: "xxx==" # binary as base64 encoded
+      delegate: # 指定另一个vs，route或redirect为空才启用，delegate的vs功能将和当前vs功能合并
+        name: xxx-vs
+        namespace: xxx-vs-ns
+      rewrite: # http请求重写，不能用于redirect，在forward前执行，仅用于http的规则
+        uri: /xxx # 基于prefix将仅替换掉匹配的内容
+        authority: xxx # 替换
+      # 也可以在应用发起的请求头上配置 x-envoy-upstream-rq-timeout-ms 指定超时
+      timeout: 1s # 转发的请求超时时间，默认禁用
+      retries: # 重试策略
+        attempts: 3 # 重试次数，实际次数受timeout和perTryTimeout参数影响
+        perTryTimeout: 1ms # 1h/1m/1s/1ms，每次重试超时数，默认不超时
+        retryOn: connect-failure,refused-stream,503 # https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/router_filter#x-envoy-retry-on
+        retryRemoteLocalities: true # 是否重试失败时到其他地方，https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/http/http_connection_management#retry-plugin-configuration
+      fault: # 客户端侧的故障注入，在vs上配置，可以配置为针对某些用户，而不会影响生产，启用时，timeout和retries不会被引用，就两种
+        delay: # 请求延迟，模拟超载的上游请求
+          fixedDelay: 7s # 7s的延迟再转发请求
+          percentage:
+            value: 100 # 100%请求
+        abort: # 请求直接拒绝，模拟异常的上游，直接返回错误给下游
+          httpStatus: 500 # 返回http状态码500
+          grpcStatus: UNAVAILABLE # https://github.com/grpc/grpc/blob/master/doc/statuscodes.md
+          percentage:
+            value: 100 # 100%请求
+      # 镜像请求会在 headers 中的 Host/Authority 属性值上追加 -shadow，如 domain-shadow
+      # 镜像请求的响应会被丢弃
+      mirror: # 流量镜像，复用destination配置，匹配该规则的流量镜像到v3版本
         host: demo-service-consumer
-        subset: v1
-    # 下列多个字段均适用于match内部
-    redirect: # 默认forward
-      uri: /xxx # 匹配的请求重定向
-      authority: xxx # 修改响应值 Authority(http2)/Host
-      derivePort: FROM_PROTOCOL_DEFAULT # 使用默认的，http用80，https用443 / FROM_REQUEST_PORT 从请求中获取port
-      schema: xxx # 修改schema
-      redirectCode: 301
-    directResponse: # route或redirect为空才启用，直接发送个响应返回
-      status: 503
-      body:
-        string: "{\"error\":\"unknown error\"}"
-        bytes: "xxx==" # binary as base64 encoded
-    delegate: # 指定另一个vs，route或redirect为空才启用，delegate的vs功能将和当前vs功能合并
-      name: xxx-vs
-      namespace: xxx-vs-ns
-    rewrite: # http请求重写，不能用于redirect，在forward前执行，仅用于http的规则
-      uri: /xxx # 基于prefix将仅替换掉匹配的内容
-      authority: xxx # 替换
-    timeout: 1s # 请求超时时间
-    retries: # 重试策略
-      attempts: 3 # 重试次数，实际次数受timeout和perTryTimeout参数影响
-      perTryTimeout: 1ms # 1h/1m/1s/1ms，每次重试超时数，默认不超时
-      retryOn: connect-failure,refused-stream,503 # https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/router_filter#x-envoy-retry-on
-      retryRemoteLocalities: true # 是否重试失败时到其他地方，https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/http/http_connection_management#retry-plugin-configuration
-    fault: # 客户端侧的故障注入，启用时，timeout和retries不会被引用，就两种，见上面
-    mirror: # 流量镜像，复用destination配置，见上面
-    mirrorPercentage:
-      value: 100
-    corsPolicy: # cors策略
-      allowOrigins:
-        - exact: https://www.baidu.com
-      allowMethods:
-        - GET
-        - POST
-      allowCredentials: false
-      allowHeaders: # 可以在请求资源时使用的HTTP标头列表
-        - X-TID
-      exposeHeaders: # 浏览器允许访问的HTTP头的列表
-        - X-TID
-      maxAge: "24h" # preflight请求的缓存时间
-    headers: # 操作消息头
-      request: # 转发请求前处理
-        add: # 追加
-          xxx: xxx
-        set: # 设置，会覆盖
-          xxx: xxx
-      response: # 返回响应前处理
-        remove:
-          - xxx
-        set:
-          content-type: "application/json"
+        subset: v3
+      mirrorPercentage: # 100%的流量都镜像
+        value: 100
+      corsPolicy: # cors策略
+        allowOrigins:
+          - exact: https://www.baidu.com
+        allowMethods:
+          - GET
+          - POST
+        allowCredentials: false
+        allowHeaders: # 可以在请求资源时使用的HTTP标头列表
+          - X-TID
+        exposeHeaders: # 浏览器允许访问的HTTP头的列表
+          - X-TID
+        maxAge: "24h" # preflight请求的缓存时间
+      headers: # 操作消息头
+        request: # 转发请求前处理
+          add: # 追加
+            xxx: xxx
+          set: # 设置，会覆盖
+            xxx: xxx
+        response: # 返回响应前处理
+          remove:
+            - xxx
+          set:
+            content-type: "application/json"
+    # 没有match的，表示默认的路由
+    - route:
+        - destination:
+            host: reviews
+            subset: v1
   tcp: # tcp流量，用于非http和tls的其他不可识别流量
     match:
       - gateways:

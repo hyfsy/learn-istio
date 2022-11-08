@@ -16,7 +16,7 @@ spec:
         version: v1 # 筛选pod(service endpoint)
       trafficPolicy: # 会覆盖destination级别的配置
         loadBalancer:
-          - simple: ROUND_ROBIN
+          simple: ROUND_ROBIN
     - name: v2
       labels:
         version: v2
@@ -60,7 +60,7 @@ spec:
     connectionPool:
       tcp: # 也通用与http
         maxConnections: 100 # 最大连接数，默认 2^23-1
-        connectTimeout: 10s # tcp超时时间
+        connectTimeout: 10s # tcp连接超时时间
         tcpKeepalive: # set SO_KEEPALIVE to socket
           time: 7200s # tcp连接的空闲时间，依赖于OS，linux默认7200s
           interval: 75s # probes扫描的周期，依赖于OS，linux默认75s
@@ -70,13 +70,13 @@ spec:
         http1MaxPendingRequests: 1024 # 请求队列大小，等待请求连接，both HTTP/1.1 and HTTP2
         http2MaxRequests: 1024 # 到destination的活跃请求数（并发请求数？），both HTTP/1.1 and HTTP2
         maxRequestsPerConnection: 1 # 每个连接的最大请求数
-        maxRetries: 3 # 超时时间
+        maxRetries: 3 # 向集群内其他节点请求的重试次数，默认Integer.MAX_VALUE
         idleTimeout: 1h # 空闲时间，没有请求会自动关闭
         h2UpgradePolicy: DEFAULT # http1.1 -> http2连接升级策略，DO_NOT_UPGRADE 表示不升级，UPGRADE 表示升级
         useClientProtocol: true # 设置为true时，h2UpgradePolicy无效，If set to true, client protocol will be preserved while initiating connection to backend
     outlierDetection: # 探测到错误的host，会被客户端从连接池中弹出，等待一段时间后再恢复
       consecutive5xxErrors: 5 # 连续返回5次错误时就会对对应主机进行熔断
-      interval: 1s # 检查周期1s
+      interval: 1s # 断闸重新检测的周期1s，将活跃的连接放回连接池
       baseEjectionTime: 1m # 将对应主机拒绝1m
       maxEjectionPercent: 10 # 负载均衡池中驱逐host的最大百分比
       splitExternalLocalOriginErrors: true # 忽略外部上游的错误，如5xx状态码，仅探测应用本身的错误，如connect timeout等，默认false

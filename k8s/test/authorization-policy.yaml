@@ -32,7 +32,7 @@ spec:
             notIpBlocks: [ "1.1.1.1" ] # ip !=
             notRemoteIpBlocks: [ "xxx" ]
         - source:
-            namespaces: [ "test" ]
+            namespaces: [ "test.txt" ]
       to:
         - operation: # 多个operation表示or，operation的多个参数表示and，参数的多个值表示or
             hosts: [ "*.exam.com" ]
