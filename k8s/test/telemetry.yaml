@@ -38,7 +38,8 @@ spec:
             mode: SERVER # 指标生成的模式，CLIENT表示客户端测生成的指标，CLIENT_AND_SERVER表示两个
           disabled: true
           tagOverrides: # 标签覆盖，部分providers可能不支持标签的添加和删除
-            xxx: xxx
+            response_code:
+              operation: REMOVE
         - tagOverrides: # 标签覆盖
             request_method:
               operation: UPSERT # insert or update，REMOVE表示删除

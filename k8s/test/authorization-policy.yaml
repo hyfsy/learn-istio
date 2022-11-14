@@ -49,7 +49,7 @@ spec:
             paths: [ "/data" ]
       when:
         - key: request.headers[x-token] # http请求头的值不是admin，所有支持的key see https://istio.io/latest/docs/reference/config/security/conditions/
-          value: [ "admin" ]
+          values: [ "admin" ]
           # not xxx
           notValues: [ "xxx" ]
         - key: request.auth.claims[iss] # 当token内包含对应字段和对应的值匹配时才应用该规则

@@ -15,7 +15,7 @@ spec:
         name: http
         protocol: HTTP # one of HTTP|HTTPS|GRPC|HTTP2|MONGO|TCP|TLS
         number: 80
-        targetPort: # 流量接受的端口，仅用于 ServiceEntry
+        targetPort: 80 # 流量接受的端口，仅用于 ServiceEntry
       hosts:
         - "*" # namespace/host 格式，一个通配符可用于host的最左边（后缀匹配）
       bind: 1.1.1.1 # 可限制该gateway仅内部可达，比如用于内部指标暴露
@@ -42,9 +42,9 @@ spec:
         cipherSuites: [ "xxx" ] # 支持的加密套件，不指定则默认基于envoy
       hosts:
         - demo-service-consumer
-  addresses:
-    - value: demo-ingress.default.svc.cluster.local # 手动配置Deployment和Service时将Ingress和Service进行关联
-      type: Hostname
+#  addresses:
+#    - value: demo-ingress.default.svc.cluster.local # 手动配置Deployment和Service时将Ingress和Service进行关联
+#      type: Hostname
 
 
 

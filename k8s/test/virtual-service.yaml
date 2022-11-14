@@ -14,7 +14,7 @@ spec:
   http:
     - name: xxx # for debug and log
       match: # 指定delegate时不能设置正则匹配
-        - name: # for log
+        - name: xxx # for log
           gateways: # 覆盖全局的gateways
             - mesh # vs中不指定gateways时会隐式指定，表示该vs应用到sidecar
             - demo-gateway
@@ -24,14 +24,14 @@ spec:
             regex: xxx # RE2 style regex-based match (https://github.com/google/re2/wiki/Syntax)
           # 也可通过请求参数 ignore_uri_case 启用
           ignoreUriCase: true
-          schema:
+          scheme:
             exact: http
           method:
             exact: GET
           authority:
             exact: xxx # http2里的
           headers: # 都小写，且用-作为分隔符串联，如：x-request-id，仅指定key将检查头是否存在
-            custom-header: xxx
+#            custom-header: xxx
             cookie:
               regex: "^(.*?;)?(email=[^;]*@some-company-name.com)(;.*)?$"
             "@request.auth.claims.groups": # @表示JWT验证的元数据，一般配合AuthorizationPolicy使用来保证此处一定有值，此功能为实验性功能，仅在gateway中支持
@@ -70,7 +70,7 @@ spec:
         uri: /xxx # 匹配的请求重定向
         authority: xxx # 修改响应值 Authority(http2)/Host
         derivePort: FROM_PROTOCOL_DEFAULT # 使用默认的，http用80，https用443 / FROM_REQUEST_PORT 从请求中获取port
-        schema: xxx # 修改schema
+        scheme: xxx # 修改scheme
         redirectCode: 301
       directResponse: # route或redirect为空才启用，直接发送个响应返回
         status: 503
@@ -136,29 +136,29 @@ spec:
             host: reviews
             subset: v1
   tcp: # tcp流量，用于非http和tls的其他不可识别流量
-    match:
-      - gateways:
-          - demo-gateway
-        port: 1234
-        destinationSubnets: 1.1.1.1 # or 1.1.1.1/24，目标子网
-        sourceLabels: # 过滤 workloads，必须包含mesh网关
-          xxx: xxx
-        sourceNamespace: xxx # 限制命名空间，必须包含mesh网关
-    route:
-      - destination:
-          host: xxx
-          port:
-            number 12345
+    - match:
+        - gateways:
+            - demo-gateway
+          port: 1234
+          destinationSubnets: [ "1.1.1.1" ] # or 1.1.1.1/24，目标子网
+          sourceLabels: # 过滤 workloads，必须包含mesh网关
+            xxx: xxx
+          sourceNamespace: xxx # 限制命名空间，必须包含mesh网关
+      route:
+        - destination:
+            host: xxx
+            port:
+              number: 12345
   tls: # https/tls请求匹配，仅用于不是TLS终止的请求
-    match:
-      - gateways:
-          - demo-gateway
-        port: 443
-        sniHosts:
-          - "*.baidu.com"
-    route:
-      - destination:
-          host: www.baidu.com
+    - match:
+        - gateways:
+            - demo-gateway
+          port: 443
+          sniHosts:
+            - "*.baidu.com"
+      route:
+        - destination:
+            host: www.baidu.com
   exportTo: [ "." ] # vs暴露的范围，默认*，表示所有namespace，[.]表示当前namespace
 
 
