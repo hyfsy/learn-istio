@@ -175,6 +175,16 @@ kubectl get pod -n istio-system -o wide
 kubectl label namespace default istio-injection=enabled
 ```
 
+> 某些 Pod 不注入的情况，可以配置 Deployment 的 annotations
+>
+> ```yaml
+> apiVersion: apps/v1
+> kind: Deployment
+> metadata:
+>   annotations:
+>     sidecar.istio.io/inject: "false"
+> ```
+
 
 
 卸载：
@@ -187,8 +197,6 @@ kubectl delete namespace istio-system
 # 删除sidecar注入标签
 kubectl label namespace default istio-injection-
 ```
-
-
 
 
 
