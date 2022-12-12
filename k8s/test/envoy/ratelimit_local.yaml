@@ -1,0 +1,90 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: test-envoyfilter-ratelimit-local-consumer
+spec:
+  workloadSelector:
+    labels:
+      app: test-consumer
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_INBOUND # 省略表示作用在所有sidecar和gateway上
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.local_ratelimit
+          typed_config:
+            "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+            type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+            value:
+              # 此处也可添加限流配置，表示全局的默认限流
+              stat_prefix: http_local_rate_limiter
+    - applyTo: HTTP_ROUTE
+      match:
+        context: SIDECAR_INBOUND
+        routeConfiguration:
+          vhost:
+            name: "inbound|http|8081"
+            route:
+              action: ANY
+      patch:
+        operation: MERGE
+        value:
+          typed_per_filter_config: # 针对于每条路由
+            envoy.filters.http.local_ratelimit: # http限流
+              "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+              type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+              value:
+                stat_prefix: http_local_rate_limiter # 指标使用标识，用来发送统计信息
+                status: # 限流返回状态码
+                  # https://www.envoyproxy.io/docs/envoy/latest/api-v3/type/v3/http_status.proto#envoy-v3-api-enum-type-v3-statuscode
+                  code: TooManyRequests
+                token_bucket: # 令牌桶配置
+                  max_tokens: 10
+                  tokens_per_fill: 10
+                  fill_interval: 60s
+                # 启用限流功能，针对百分比的请求进行限流功能，但百分比比率不是比例的
+                filter_enabled:
+                  runtime_key: local_rate_limit_enabled # 下面默认的FractionalPercent的标识
+                  default_value: # 限流百分比阈值，默认0%
+                    numerator: 100
+                    denominator: HUNDRED # HUNDRED, TEN_THOUSAND, MILLION
+                # 针对于enabled比例的那部分请求，是强制的
+                filter_enforced:
+                  runtime_key: local_rate_limit_enforced
+                  default_value:
+                    numerator: 100
+                    denominator: HUNDRED
+                # 限流允许后，转发请求额外添加的头，仅用于没有启用 enforce 的情况
+                request_headers_to_add_when_not_enforced:
+                  - append: false
+                    header:
+                      key: x-local-rate-limit
+                      value: 'true'
+                # 限流允许后，转发请求额外添加的头，enable 或 enforce 两个情况都有效
+                response_headers_to_add:
+                  - header:
+                      key: x-local-rate-limit
+                      value: 'true'
+                    append: false # 不推荐，推荐使用append_action
+                    append_action: OVERWRITE_IF_EXISTS_OR_ADD # APPEND_IF_EXISTS_OR_ADD（默认）、ADD_IF_ABSENT、OVERWRITE_IF_EXISTS_OR_ADD
+                    keep_empty_value: true # 空value的头是否被删除
+                stage: 0 # 该配置应用的阶段，默认0
+                local_rate_limit_per_downstream_connection: false # 每条连接限流还是每个envoy进程限流，默认false
+                enable_x_ratelimit_headers: DRAFT_VERSION_03 # 默认 OFF，此处的配置会默认添加 X-RateLimit-Limit、X-RateLimit-Remaining、X-RateLimit-Reset
+                vh_rate_limits: OVERRIDE # OVERRIDE、INCLUDE、IGNORE，是否对虚拟主机应用限流功能
+                # 需要配置限流行为与descriptors匹配：https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto#config-route-v3-ratelimit
+                descriptors: # 可覆盖上面配置的，多个匹配的按照 tokens_per_fill 排序，小的靠前
+                  entries:
+                    - key: xxx
+                      value: xxx
+                  token_bucket:
+                    max_tokens: 10
+                    tokens_per_fill: 10
+                    fill_interval: 60s
+

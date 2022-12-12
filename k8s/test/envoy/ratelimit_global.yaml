@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config-ratelimit-global-provider
+data:
+  config.yaml: |
+    domain: test-ratelimit
+    descriptors:
+      - key: PATH
+        value: "/consumer/test/ex/4"
+        rate_limit:
+          unit: second # second, minute, hour, day
+          requests_per_unit: 1
+      - key: PATH # 默认全局请求
+        rate_limit:
+          unit: minute
+          requests_per_unit: 5
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: test-envoyfilter-ratelimit-global
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      istio: ingressgateway
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.ratelimit # extension name
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit
+            domain: test-ratelimit-config-provider # 匹配config名称
+            failure_mode_deny: true # envoy和限流服务通讯失败时，是否拒绝所有流量
+            timeout: 10s # 请求限流服务的超时时间
+            rate_limited_status: 429 # 限流返回的状态码，默认或<400都会返回429
+            rate_limit_service:
+              grpc_service:
+                envoy_grpc:
+                  # envoy自己的限流服务
+                  # https://github.com/envoyproxy/ratelimit
+                  cluster_name: outbound|8081||ratelimit.default.svc.cluster.local
+                  authority: ratelimit.default.svc.cluster.local
+              transport_api_version: V3
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: test-envoyfilter-ratelimit-global-provider
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      istio: ingressgateway
+  configPatches:
+    - applyTo: VIRTUAL_HOST
+      match:
+        context: GATEWAY
+        routeConfiguration:
+          vhost:
+            name: ""
+            route:
+              action: ANY
+      patch:
+        operation: MERGE
+        value:
+          rate_limits:
+            - actions:
+                - request_headers:
+                    header_name: ":path"
+                    descriptor_key: "PATH"
+
+
+

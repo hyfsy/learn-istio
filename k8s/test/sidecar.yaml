@@ -1,0 +1,42 @@
+# 网格代理流量拦截配置，细粒度的允许某些入口或出口流量
+apiVersion: networking.istio.io/v1alpha3
+kind: Sidecar
+metadata:
+  name: no-ip-tables
+  namespace: prod-us1 # or istio-system 指定全网格
+spec:
+  workloadSelector:
+    labels:
+      app: productpage
+  ingress:
+    - port:
+        number: 9080 # listener 监听的端口 (0.0.0.0:9080, if no unicast IP is available for the instance)
+        protocol: HTTP
+        name: http
+      bind: 192.168.1.1 # listener 绑定的ip，默认根据pod和service的信息进行应用
+      # Format should be one of
+      # 127.0.0.1:PORT, [::1]:PORT (forward to localhost)
+      # 0.0.0.0:PORT, [::]:PORT (forward to the instance IP)
+      # unix:///path/to/socket (forward to Unix domain socket)
+      defaultEndpoint: 127.0.0.1:8080 # 代理将流量转发到的端口，仅支持固定格式的IPs
+      # DEFAULT 表示从环境变量中获取模式
+      # IPTABLES 表示通过ipTables捕获
+      # NONE 在egress中表示应用直接于外部服务通讯，ingress中使用时需要确保其他进程没有使用该端口
+      captureMode: DEFAULT # DEFAULT/IPTABLES/NONE
+      tls: # gateway#ServerTLSSettings
+        mode: SIMPLE
+  egress:
+    - port:
+        number: 3306
+        protocol: MYSQL
+        name: egressmysql
+      captureMode: NONE # not needed if metadata is set for entire proxy
+      bind: 127.0.0.1 # listener 监听的ip
+      hosts:
+        # * 所有、. 当前、~ 不选择
+        - "*/*.mysql.foo.com" # namespace/domain
+  outboundTrafficPolicy: #
+    mode: ALLOW_ANY # ALLOW_ANY、REGISTRY_ONLY 是否允许流量到外部服务，不推荐使用 ALLOW_ANY，推荐使用 ServiceEntry
+
+
+

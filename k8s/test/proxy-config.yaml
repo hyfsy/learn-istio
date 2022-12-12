@@ -1,0 +1,16 @@
+# 网格代理的配置
+apiVersion: networking.istio.io/v1beta1
+kind: ProxyConfig
+metadata:
+  name: per-workload-proxyconfig
+  namespace: example # 指定命名空间或全局（istio-system）有效
+spec:
+  selector:
+    matchLabels:
+      app: xxx # 选择器只能选择单个资源
+  concurrency: 0 # 代理的工作线程数量，不指定默认2，指定为0默认根据机器的CPU的request和limit决定
+  environmentVariables: # 代理的环境配置，ISTIO_META 开头的配置会发送给代理服务器的引导配置
+    XXX: xxx
+    ISTIO_META_XXX: xxx
+  image:
+    imageType: debug # 可指定 default, debug, distroless 表示从dockerHub上下载，或指定自己的私仓，格式：${hub}/${image_name}/${tag}-${image_type}

@@ -12,7 +12,7 @@ spec:
     - config-namespace/demo-gateway # 相同的namespace可以被省略
     - mesh
   http:
-    - name: xxx # for debug and log
+    - name: xxx # for debug and log...
       match: # 指定delegate时不能设置正则匹配
         - name: xxx # for log
           gateways: # 覆盖全局的gateways
@@ -30,8 +30,9 @@ spec:
             exact: GET
           authority:
             exact: xxx # http2里的
-          headers: # 都小写，且用-作为分隔符串联，如：x-request-id，仅指定key将检查头是否存在
-#            custom-header: xxx
+          headers: # 都小写，且用-作为分隔符串联，如：x-request-id，仅指定key时只会检查头是否存在
+            custom-header:
+              regex: xxx
             cookie:
               regex: "^(.*?;)?(email=[^;]*@some-company-name.com)(;.*)?$"
             "@request.auth.claims.groups": # @表示JWT验证的元数据，一般配合AuthorizationPolicy使用来保证此处一定有值，此功能为实验性功能，仅在gateway中支持
@@ -66,6 +67,7 @@ spec:
               set: # 设置，会覆盖
                 xxx: xxx
       # 下列多个字段均适用于match内部
+      # route/redirect/directResponse oneof
       redirect: # 默认forward
         uri: /xxx # 匹配的请求重定向
         authority: xxx # 修改响应值 Authority(http2)/Host
@@ -130,6 +132,15 @@ spec:
             - xxx
           set:
             content-type: "application/json"
+    # grpc的api级别的请求匹配
+    - match:
+        - port: 5443
+        - uri:
+            exact: /remoting.v1.RemotingApi/request
+      route:
+        - destination:
+            host: grpc-service
+            subset: v1
     # 没有match的，表示默认的路由
     - route:
         - destination:

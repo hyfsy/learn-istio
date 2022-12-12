@@ -1,0 +1,89 @@
+# 自定义 pilot 下发的envoy配置
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: wasm-service
+#  namespace: istio-system # 不配置workload时为全局配置
+spec:
+  priority: 0 # 多个配置时的顺序，小于0表示在istio默认的之前，多个配置排序方式：priority > resource create time > resource name
+  workloadSelector: # workload级别限流，不填默认当前命名空间下所有workload
+    labels:
+      app: test-provider
+  configPatches:
+    - applyTo: BOOTSTRAP # 补丁被应用的地方，参考：https://istio.io/latest/zh/docs/reference/config/networking/envoy-filter/#EnvoyFilter-ApplyTo
+      match:
+        context: ANY # 配置上下文：ANY、SIDECAR_INBOUND、SIDECAR_OUTBOUND、GATEWAY
+        proxy: # 筛选proxy
+          proxyVersion: 1.15.2
+          metadata:
+            app: xxx
+        listener: # 匹配 listener 内对应的过滤器链或过滤器
+          name: xxx # listener name
+          portNumber: 8081 # 推荐使用服务端口而非pod端口
+          filterChain: # 匹配过滤链
+            name: xxx # filter chain name
+            sni: xxx
+            transportProtocol: raw_buffer # 仅能用于 context为 SIDECAR_INBOUND，默认raw_buffer ，或 tls 表示可以通过 tls_inspector 扫描到该协议
+            applicationProtocols: http/1.1,h2 # 仅能用于 sidecar，可指定 h2、http/1.1、http/1.0，通过 http_inspector 扫描协议，多个逗号分割
+            filter: # 匹配过滤器
+              name: xxx # filter name
+              subFilter: # 过滤器内的子过滤器，Typically used for HTTP Connection Manager filters and Thrift filters.
+                name: xxx
+            destinationPort: 8081
+        routeConfiguration:
+          portNumber: 111 # 服务或网关端口
+          portName: xxx # 仅适用于 GATEWAY，指定网关服务器的端口名称，portName
+          gateway: xxx # 仅适用于 GATEWAY，指定网关服务器的名称或命名空间
+          vhost:
+            name: xxx # 格式为 host:port，host为VirtualService中的host字段，service的hostname字段？inbound|http|8082
+            route:
+              name: xxx # 虚拟服务创建的Route将携带http路由中使用的name
+              action: ANY # 路由匹配时，envoy所采取的路由动作，有 ANY（代表了后面三个）、ROUTE（路由到集群）、REDIRECT（重定向请求）、DIRECT_RESPONSE（返回固定响应）
+          name: xxx # 指定匹配的 envoy 的路由名称，比如内部的 http_proxy
+        cluster:
+          portNumber: 111 # 服务端口
+          service: xxx # 服务名称，serviceEntry的情况，名称为 host
+          subset: xxx # 服务子集
+          name: xxx # 集群名称，例如内部生成的Passthrough集群
+      patch:
+        operation: INSERT_BEFORE # https://istio.io/latest/zh/docs/reference/config/networking/envoy-filter/#EnvoyFilter-Patch-Operation
+        filterClass: UNSPECIFIED # UNSPECIFIED（istio自行决定，如果过滤器独立于其他过滤器，则不要指定FilterClass）、AUTHN（认证过滤器后）、AUTHZ（授权过滤器后）、STATS（统计过滤器后）
+        value: # lua filter specification
+          name: envoy.filters.http.lua
+          typed_config:
+            "@type": "type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua"
+            inlineCode: |
+              function envoy_on_request(request_handle)
+                -- Make an HTTP call to an upstream host with the following headers, body, and timeout.
+                local headers, body = request_handle:httpCall(
+                 "lua_cluster",
+                 {
+                  [":method"] = "POST",
+                  [":path"] = "/acl",
+                  [":authority"] = "internal.org.net"
+                 },
+                "authorize call",
+                5000)
+              end
+            # The second patch adds the cluster that is referenced by the lua code
+            # cds match is omitted as a new cluster is being added
+    - applyTo: CLUSTER
+      match:
+        context: SIDECAR_OUTBOUND
+      patch:
+        operation: ADD
+        value:
+          name: "lua_cluster"
+          type: STRICT_DNS
+          connect_timeout: 0.5s
+          lb_policy: ROUND_ROBIN
+          load_assignment:
+            cluster_name: lua_cluster
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          protocol: TCP
+                          address: "internal.org.net"
+                          port_value: 8888

@@ -169,21 +169,68 @@ kubectl get service -n istio-system -o wide
 kubectl get pod -n istio-system -o wide
 ```
 
-5、启用sidecar注入
+5、启用default命名空间的sidecar注入
 
 ```shell
 kubectl label namespace default istio-injection=enabled
 ```
 
-> 某些 Pod 不注入的情况，可以配置 Deployment 的 annotations
+> 某些 Pod 不注入的情况，可以配置 Deployment 的 annotations 来禁用
 >
 > ```yaml
 > apiVersion: apps/v1
 > kind: Deployment
 > metadata:
->   annotations:
->     sidecar.istio.io/inject: "false"
+>     annotations:
+>        sidecar.istio.io/inject: "false"
 > ```
+
+> 不指定命名空间时，用命令行手动注入
+>
+> ```shell
+> kubectl apply -f <(istioctl kube-inject -f xxx.yaml)
+> ```
+
+
+
+**istio启动时如果pod出现Init:CrashLoopBackOff状态**
+
+如果pod出现`Init:CrashLoopBackOff`状态，检查istio-init进程日志
+
+```shell
+kubectl logs productpage-v1-6b746f74dc-4hdpp istio-init
+```
+
+出现下列日志：
+
+```
+2021-12-27T09:06:18.692140Z     info    Running command: iptables-restore --noflush /tmp/iptables-rules-1640595978692007050.txt1847614466
+2021-12-27T09:06:18.694937Z     error   Command error output: xtables parameter problem: iptables-restore: unable to initialize table 'nat'
+ 
+Error occurred at line: 1
+Try `iptables-restore -h' or 'iptables-restore --help' for more information.
+2021-12-27T09:06:18.694953Z     error   Failed to execute: iptables-restore --noflush /tmp/iptables-rules-1640595978692007050.txt1847614466, exit status 2
+```
+
+原因：**iptables模块未被加载，所以我们可以尝试在所有k8s集群节点上加载iptables模块**
+
+```shell
+# 临时生效
+modprobe ip_tables
+modprobe iptable_filter
+modprobe iptable_nat
+
+# 永久生效
+[root@k8s-master ~]# cat /etc/sysconfig/modules/iptables.modules
+modprobe -- ip_tables
+modprobe -- iptable_filter
+modprobe -- iptable_nat
+[root@k8s-master ~]# chmod 755 /etc/sysconfig/modules/iptables.modules   #设置权限
+```
+
+
+
+
 
 
 
@@ -194,7 +241,7 @@ kubectl label namespace default istio-injection=enabled
 istioctl uninstall --purge
 # 删除命名空间
 kubectl delete namespace istio-system
-# 删除sidecar注入标签
+# 删除default命名空间的sidecar注入标签
 kubectl label namespace default istio-injection-
 ```
 
@@ -688,7 +735,7 @@ spec:
     retries: # 重试3次，每次重试的超时时间为2s，5xx响应情况才会重试
       attempts: 3
       perTryTimeout: 2s
-      retryOn: 5xx
+      retryOn: 5xx # 重试条件，更多参考：https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/router_filter#x-envoy-retry-on
 ```
 
 
@@ -1182,6 +1229,15 @@ kubectl wait --for=condition=Reconciled virtualservice/<vs-name>
 
 
 
+**envoy配置导出**
+
+```bash
+kubecctl exec -it {你的网关或者业务Pod名} -c istio-proxy -n {你的网关或者业务Pod所在的命名空间} -- curl localhost:15000/config_dump > {文件路径}
+curl localhost:15000/clusters > {文件路径}
+```
+
+
+
 最佳实践：
 
 - Service 配置的端口名，推荐以 `<protocol>[-<custom-suffix>]` 的格式，方便istio自动推断请求的协议
@@ -1211,8 +1267,6 @@ DestinationRule 的exportTo没啥作用，执行时还是按照查找规则来�
 
 
 修改 VirtualService 和 DestinationRule 时，先更新 DestinationRule 并等待推送到所有服务后，再更新 VirtualService，防止因 DestinationRule 没有更新完毕导致客户端请求出现503错误
-
-
 
 
 
@@ -1256,7 +1310,11 @@ Istio使用的端口：https://istio.io/latest/docs/ops/deployment/requirements/
 
 
 
+标准指标：https://istio.io/latest/zh/docs/reference/config/metrics/
 
+标准标签：https://istio.io/latest/zh/docs/reference/config/labels/
+
+标准注解：https://istio.io/latest/zh/docs/reference/config/annotations/
 
 
 
